@@ -12,14 +12,18 @@ import warnings
 
 random.seed(1618)
 np.random.seed(1618)
-tf.random.set_seed(1618)
+tf.compat.v1.set_random_seed(1618)
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-CONTENT_IMG_PATH = "/Users/alex_p/Desktop/CS390NIP/Lab2/elmo.jpg"            #TODO: Add this.
-STYLE_IMG_PATH = "/Users/alex_p/Desktop/CS390NIP/Lab2/mushroom.jpg"             #TODO: Add this.
+## Comment out whichever set you don't want to use
 
+#CONTENT_IMG_PATH = "/Users/alex_p/Desktop/CS390NIP/Lab2/Shreveport.png"            
+#STYLE_IMG_PATH = "/Users/alex_p/Desktop/CS390NIP/Lab2/mushroom.png"            
+
+CONTENT_IMG_PATH = "/Users/alex_p/Desktop/CS390NIP/Lab2/dog.png"
+STYLE_IMG_PATH = "/Users/alex_p/Desktop/CS390NIP/Lab2/pond.png"
 
 CONTENT_IMG_H = 500
 CONTENT_IMG_W = 500
@@ -27,11 +31,11 @@ CONTENT_IMG_W = 500
 STYLE_IMG_H = 500
 STYLE_IMG_W = 500
 
-CONTENT_WEIGHT = 0.1    # Alpha weight.
+CONTENT_WEIGHT = 0.025    # Alpha weight.
 STYLE_WEIGHT = 1.0      # Beta weight.
 TOTAL_WEIGHT = 1.0
 
-TRANSFER_ROUNDS = 3
+TRANSFER_ROUNDS = 5
 
 
 
@@ -46,7 +50,7 @@ def deprocessImage(img):
         img = img.reshape((3, CONTENT_IMG_H, CONTENT_IMG_W))
         img = img.transpose((1, 2, 0))
     else:
-        img = img.reshape((CONTENT_IMG_H, CONTENT_IMG_W))
+        img = img.reshape((CONTENT_IMG_H, CONTENT_IMG_W, 3))
     # Remove zero-center by mean pixel
     img[:,:,0] += 103.939
     img[:,:,1] += 116.779
@@ -129,29 +133,6 @@ def preprocessData(raw):
     img = vgg19.preprocess_input(img)
     return img
 
-##### Additional functions
-def eval_loss(x):
-    if K.image_data_format() == "channels_first":
-        x = x.reshape((1, 3, CONTENT_IMG_H, CONTENT_IMG_W))
-    else:
-        x = x.reshape((1, CONTENT_IMG_H, CONTENT_IMG_W, 3))
-    outs = f_outputs([x])
-    loss_val = outs[0]
-    return loss_val
-
-def eval_grads(x):
-    if K.image_data_format() == "channels_first":
-        x = x.reshape((1, 3, CONTENT_IMG_H, CONTENT_IMG_W))
-    else:
-        x = x.reshape((1, CONTENT_IMG_H, CONTENT_IMG_W, 3))
-    outs = f_outputs([x])
-    if len(outs[1:]) == 1:
-        grad_vals = outs[1].flatten().astype("float64")
-    else:
-        grad_vals = np.array(outs[1:]).flatten().astype("float64")
-    return grad_vals
-
-##### End additional functions
 '''
 TODO: Allot of stuff needs to be implemented in this function.
 First, make sure the model is set up properly.
@@ -199,8 +180,29 @@ def styleTransfer(cData, sData, tData):
     
     f_outputs = K.function([genTensor], outputs)
 
-    
-    x = contentTensor.copy()    
+    def eval_loss(x):
+        if K.image_data_format() == "channels_first":
+            x = x.reshape((1, 3, CONTENT_IMG_H, CONTENT_IMG_W))
+        else:
+            x = x.reshape((1, CONTENT_IMG_H, CONTENT_IMG_W, 3))
+        outs = f_outputs([x])
+        loss_val = outs[0]
+        return loss_val
+
+    def eval_grads(x):
+        if K.image_data_format() == "channels_first":
+            x = x.reshape((1, 3, CONTENT_IMG_H, CONTENT_IMG_W))
+        else:
+            x = x.reshape((1, CONTENT_IMG_H, CONTENT_IMG_W, 3))
+        outs = f_outputs([x])
+        if len(outs[1:]) == 1:
+            grad_vals = outs[1].flatten().astype("float64")
+        else:
+            grad_vals = np.array(outs[1:]).flatten().astype("float64")
+        return grad_vals
+        
+    loadedImg = load_img(CONTENT_IMG_PATH)
+    x = preprocessData((loadedImg, CONTENT_IMG_H, CONTENT_IMG_W))
 
     print("   Beginning transfer.")
     for i in range(TRANSFER_ROUNDS):
@@ -208,14 +210,12 @@ def styleTransfer(cData, sData, tData):
         #TODO: perform gradient descent using fmin_l_bfgs_b.#######################
         x, min, info = fmin_l_bfgs_b(eval_loss, x.flatten(), fprime=eval_grads, maxfun=20)
         print("      Loss: %f." % min)
-        img = deprocessImage(x)
-        saveFile = None   #TODO: Implement.
-        #imsave(saveFile, img)   #Uncomment when everything is working right.
+        img = deprocessImage(x.copy())
+        saveFile = "/Users/alex_p/Desktop/CS390NIP/Lab2/" + "transfer_round_%d.png" % i
+        imsave(saveFile, img)   #Uncomment when everything is working right.
         print("      Image saved to \"%s\"." % saveFile)
     print("   Transfer complete.")
-
-
-
+    
 
 
 #=========================<Main>================================================
